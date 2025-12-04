@@ -1,0 +1,13 @@
+{
+  "type": "invoice",
+  "vendor_name": "string",
+  "date": "YYYY-MM-DD",
+  "total_ttc": "float",
+  "currency": "string",
+  "items": [
+    {
+      "desc": "string",
+      "price": "float"
+    }
+  ]
+}

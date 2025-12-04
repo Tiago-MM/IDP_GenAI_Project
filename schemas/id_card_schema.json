@@ -1,0 +1,8 @@
+{
+  "type": "id_card",
+  "first_name": "string",
+  "last_name": "string",
+  "id_number": "string",
+  "birth_date": "YYYY-MM-DD",
+  "expiry_date": "YYYY-MM-DD"
+}
