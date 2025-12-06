@@ -14,7 +14,8 @@ load_dotenv()
 
 st.set_page_config(
     layout="wide",
-    page_title="IDP GenAI Project",
+    # J'ai déplacé le titre dans le header pour la cohérence
+    page_title="IDP GenAI Project", 
     initial_sidebar_state="expanded",
     menu_items={"About": "Extraction de documents avancée par IA"}
 )
@@ -22,50 +23,84 @@ st.set_page_config(
 # --- INITIALISATION DU SESSION STATE ---
 if "extraction_result" not in st.session_state:
     st.session_state.extraction_result = None
-if "active_view" not in st.session_state: # Nouvel état pour la vue active
+if "active_view" not in st.session_state: 
     st.session_state.active_view = 'Image'
 if "fullscreen_mode" not in st.session_state:
     st.session_state.fullscreen_mode = False
 
-# --- VARIABLES ET CSS CUSTOM (Nettoyage des classes non utilisées) ---
-PRIMARY_COLOR = "#667eea"
-SECONDARY_COLOR = "#764ba2"
-SUCCESS_COLOR = "#28a745"
+# --- VARIABLES ET CSS CUSTOM ---
+PRIMARY_COLOR = "#333333"
+SECONDARY_COLOR = "#999999"
+SUCCESS_COLOR = "#609966"
 
 st.markdown(f"""
     <style>
-        /* La classe .main-header a été retirée */
+        /* 1. Rendre le HEADER plus fin */
+        h1, h2 {{
+            margin-top: 5px; /* Réduire l'espace en haut */
+            padding-top: 0;
+            margin-bottom: 5px; /* Réduire l'espace en bas */
+        }}
+        .logo-container {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 5px;
+        }}
         .section-title {{
             color: {PRIMARY_COLOR};
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            border-left: 4px solid {PRIMARY_COLOR};
+            margin-top: 15px;
+            margin-bottom: 5px;
+            border-left: 4px solid {SECONDARY_COLOR};
             padding-left: 10px;
         }}
         .info-box {{
-            background-color: #f0f2f6;
+            background-color: #F8F8F8;
             padding: 15px;
             border-radius: 8px;
-            border-left: 4px solid {PRIMARY_COLOR};
+            border-left: 4px solid {SECONDARY_COLOR};
             margin: 10px 0;
         }}
         .success-box {{
-            background-color: #d4edda;
+            background-color: #e6f7e6;
             padding: 15px;
             border-radius: 8px;
             border-left: 4px solid {SUCCESS_COLOR};
         }}
-        /* Marge pour le titre principal */
-        h1 {{
-            margin-top: 0;
-        }}
     </style>
 """, unsafe_allow_html=True)
 
-# Header simplifié (pas de banner)
-st.title("📄 Intelligent Document Processing")
+# --- HEADER (LOGO + TITRE) ---
+
+# Remplacement du header par un conteneur logo (Exemple : Utiliser un titre simple)
+st.markdown("""
+    <div class="logo-container">
+        <h2>IDP Project</h2>
+    </div>
+""", unsafe_allow_html=True)
+
+
+# --- BARRE DE NAVIGATION (IMMÉDIATEMENT SOUS LE LOGO) ---
+col_btn_img, col_btn_json, col_spacer = st.columns([1, 1, 6])
+
+with col_btn_img:
+    btn_style_img = "secondary" if st.session_state.active_view != 'Image' else "primary"
+    if st.button("🖼️ Visualiser l'Image", type=btn_style_img, use_container_width=True, key='view_img'):
+        st.session_state.active_view = 'Image'
+
+with col_btn_json:
+    btn_style_json = "secondary"
+    if st.session_state.extraction_result:
+        btn_style_json = "secondary" if st.session_state.active_view != 'JSON' else "primary"
+        if st.button("🌲 Visualiser le JSON", type=btn_style_json, use_container_width=True, key='view_json'):
+            st.session_state.active_view = 'JSON'
+    else:
+        st.button("🌲 Visualiser le JSON", disabled=True, use_container_width=True)
+
+st.markdown("---")
+# Fin de la barre de navigation
 
 # --- UPLOADER ---
 st.markdown("<div class='section-title'>📤 Télécharger votre document</div>", unsafe_allow_html=True)
@@ -81,7 +116,7 @@ if uploaded_file and 'last_uploaded_file' in st.session_state:
     if st.session_state.last_uploaded_file != uploaded_file.name:
         st.session_state.extraction_result = None
         st.session_state.last_uploaded_file = uploaded_file.name
-        st.session_state.active_view = 'Image' # Revenir à la vue Image
+        st.session_state.active_view = 'Image'
 elif uploaded_file:
     st.session_state.last_uploaded_file = uploaded_file.name
 
@@ -101,13 +136,13 @@ with st.sidebar:
 
     st.divider()
     
-    # --- LOGIQUE D'EXTRACTION (Déplacée dans la sidebar) ---
+    # --- LOGIQUE D'EXTRACTION ---
     if uploaded_file:
         if st.button("🚀 Extraire les données", type="primary", use_container_width=True, key="extract_btn"):
             st.session_state.extraction_result = None 
-            st.session_state.active_view = 'JSON' # Passer à la vue JSON après l'extraction
+            st.session_state.active_view = 'JSON'
 
-            st.info("⏳ Analyse en cours... Voir les résultats dans l'onglet 'JSON'.")
+            st.info("⏳ Analyse en cours... Voir les résultats dans la vue 'JSON'.")
 
             try:
                 uploaded_file.seek(0) 
@@ -141,49 +176,28 @@ with st.sidebar:
         st.warning("⚠️ Téléchargez un fichier pour activer le bouton.")
 
 
-# --- CONTENU PRINCIPAL : NAVIGATION PAR BOUTONS ---
+# --- CONTENU PRINCIPAL : AFFICHAGE DÉTAILLÉ ---
 
 if uploaded_file:
     uploaded_file.seek(0)
     image_pil = Image.open(uploaded_file)
     
-    st.divider()
-    st.markdown("## Vue Détaillée")
-
-    # 1. Barre de Boutons (Header de Navigation)
-    col_btn_img, col_btn_json, col_spacer = st.columns([1, 1, 6])
-
-    with col_btn_img:
-        # Style pour le bouton actif
-        btn_style_img = "secondary" if st.session_state.active_view != 'Image' else "primary"
-        if st.button("🖼️ Visualiser l'Image", type=btn_style_img, use_container_width=True, key='view_img'):
-            st.session_state.active_view = 'Image'
-
-    with col_btn_json:
-        # Le bouton JSON ne peut être cliqué que si le résultat est là
-        btn_style_json = "secondary" if st.session_state.active_view != 'JSON' and st.session_state.extraction_result else "primary"
-        
-        if st.session_state.extraction_result:
-            if st.button("🌲 Visualiser le JSON", type=btn_style_json, use_container_width=True, key='view_json'):
-                st.session_state.active_view = 'JSON'
-        else:
-            st.button("🌲 Visualiser le JSON", disabled=True, use_container_width=True) # Bouton désactivé
-    
-    st.markdown("---")
-
-
     # 2. Affichage du contenu basé sur l'état
     
     # --- VUE IMAGE ---
     if st.session_state.active_view == 'Image':
-        st.markdown("### Aperçu du Document (Zoomable)", unsafe_allow_html=True)
-        # Utilisation du zoom de la sidebar
+        st.markdown("### Aperçu du Document (Vue Image)", unsafe_allow_html=True)
+        st.markdown(f"**Fichier:** `{uploaded_file.name}`")
+        st.markdown("---")
         st.image(image_pil, width=int(image_pil.width * zoom_level / 100), use_container_width=True) 
         
     # --- VUE JSON ---
     elif st.session_state.active_view == 'JSON' and st.session_state.extraction_result:
         result_data = st.session_state.extraction_result
         
+        st.markdown("### Données Structurées (Vue JSON)", unsafe_allow_html=True)
+        st.markdown("---")
+
         if "error" in result_data and "raw" in result_data:
             st.error("❌ Le modèle n'a pas renvoyé un JSON valide.")
             with st.expander("Réponse brute du modèle", expanded=True):
