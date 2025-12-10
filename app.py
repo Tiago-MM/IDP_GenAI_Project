@@ -4,13 +4,15 @@ import os
 import json
 from PIL import Image
 from dotenv import load_dotenv
-
-# Import local
+from groq import Groq# Import local
 from src.llm_engine import analyse_image
 from src.utils import clean_json_output
+from src.ocr_engine import process_with_easyocr, parse_ocr_with_llm
 
 # --- INITIALISATION ET CONFIGURATION GLOBALE ---
 load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY)
 
 st.set_page_config(
     layout="wide",
@@ -125,7 +127,7 @@ with st.sidebar:
     st.markdown("### ⚙️ Configuration du Modèle")
     model_choice = st.selectbox(
         "🤖 Modèle IA",
-        ["meta-llama/llama-4-scout-17b-16e-instruct"],
+        ["meta-llama/llama-4-scout-17b-16e-instruct", "easyocr"],
         help="Sélectionnez le modèle à utiliser pour l'analyse"
     )
     st.info("ℹ️ L'extraction se fait en mode Auto-Schema.")
@@ -148,23 +150,30 @@ with st.sidebar:
                 uploaded_file.seek(0) 
                 img_bytes = uploaded_file.read()
                 encoded_image = base64.b64encode(img_bytes).decode('utf-8')
-                
-                raw_result_generator = analyse_image(
-                    image=encoded_image,
-                    model=model_choice
-                )
+                final_data='test ----'
+                if model_choice == "easyocr":
+                    with st.spinner("Lecture avec EasyOCR..."):
+                        # Appel de la fonction
+                        raw_text, structured_data = process_with_easyocr(img_bytes)
+                        final_data = parse_ocr_with_llm(raw_text, client_groq=client)
+                    
+                else :
+                    raw_result_generator = analyse_image(
+                        image=encoded_image,
+                        model=model_choice
+                    )
 
-                full_raw_result = "".join([chunk.choices[0].delta.content or "" for chunk in raw_result_generator])
-                
-                # Parsing final
-                if isinstance(full_raw_result, str):
-                    cleaned_str = clean_json_output(full_raw_result) 
-                    try:
-                        final_data = json.loads(cleaned_str)
-                    except json.JSONDecodeError:
-                        final_data = {"error": "JSON invalide", "raw": full_raw_result}
-                else:
-                    final_data = full_raw_result
+                    full_raw_result = "".join([chunk.choices[0].delta.content or "" for chunk in raw_result_generator])
+                    
+                    # Parsing final
+                    if isinstance(full_raw_result, str):
+                        cleaned_str = clean_json_output(full_raw_result) 
+                        try:
+                            final_data = json.loads(cleaned_str)
+                        except json.JSONDecodeError:
+                            final_data = {"error": "JSON invalide", "raw": full_raw_result}
+                    else:
+                        final_data = full_raw_result
 
                 # Sauvegarde et mise à jour de l'UI
                 st.session_state.extraction_result = final_data
