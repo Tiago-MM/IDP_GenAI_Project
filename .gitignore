@@ -5,3 +5,7 @@ __pycache__/
 data/input/*
 data/output/*
 !data/samples/
+models/*
+.venv/
+.ipynb_checkpoints/
+sagemaker_env/

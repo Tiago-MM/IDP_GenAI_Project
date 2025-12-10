@@ -1,103 +1,108 @@
+import base64
 import streamlit as st
 import os
 import json
 from PIL import Image
-import io
+from dotenv import load_dotenv
 
-# Import local (nécessite que le dossier src contienne __init__.py)
-from src.llm_engine import analyze_image
+# Import local
+from src.llm_engine import analyse_image
 from src.utils import clean_json_output
 
-# Configuration page
+# --- INITIALISATION ET CONFIGURATION GLOBALE ---
+load_dotenv()
+
 st.set_page_config(
     layout="wide",
-    page_title="IDP GenAI Project",
+    # J'ai déplacé le titre dans le header pour la cohérence
+    page_title="IDP GenAI Project", 
     initial_sidebar_state="expanded",
-    menu_items={"About": "Intelligent Document Processing with Llama 3.2 Vision"}
+    menu_items={"About": "Extraction de documents avancée par IA"}
 )
 
-# Custom CSS pour plus de style
-st.markdown("""
+# --- INITIALISATION DU SESSION STATE ---
+if "extraction_result" not in st.session_state:
+    st.session_state.extraction_result = None
+if "active_view" not in st.session_state: 
+    st.session_state.active_view = 'Image'
+if "fullscreen_mode" not in st.session_state:
+    st.session_state.fullscreen_mode = False
+
+# --- VARIABLES ET CSS CUSTOM ---
+PRIMARY_COLOR = "#333333"
+SECONDARY_COLOR = "#999999"
+SUCCESS_COLOR = "#609966"
+
+st.markdown(f"""
     <style>
-        .main-header {
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            color: white;
-            margin-bottom: 20px;
-        }
-        .section-title {
-            color: #667eea;
-            font-size: 20px;
+        /* 1. Rendre le HEADER plus fin */
+        h1, h2 {{
+            margin-top: 5px; /* Réduire l'espace en haut */
+            padding-top: 0;
+            margin-bottom: 5px; /* Réduire l'espace en bas */
+        }}
+        .logo-container {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 5px;
+        }}
+        .section-title {{
+            color: {PRIMARY_COLOR};
+            font-size: 18px;
             font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            border-left: 4px solid #667eea;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            border-left: 4px solid {SECONDARY_COLOR};
             padding-left: 10px;
-        }
-        .info-box {
-            background-color: #f0f2f6;
+        }}
+        .info-box {{
+            background-color: #F8F8F8;
             padding: 15px;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid {SECONDARY_COLOR};
             margin: 10px 0;
-        }
-        .success-box {
-            background-color: #d4edda;
+        }}
+        .success-box {{
+            background-color: #e6f7e6;
             padding: 15px;
             border-radius: 8px;
-            border-left: 4px solid #28a745;
-        }
+            border-left: 4px solid {SUCCESS_COLOR};
+        }}
     </style>
 """, unsafe_allow_html=True)
 
-# Header
+# --- HEADER (LOGO + TITRE) ---
+
+# Remplacement du header par un conteneur logo (Exemple : Utiliser un titre simple)
 st.markdown("""
-    <div class="main-header">
-        <h1>📄 Intelligent Document Processing</h1>
-        <p>Extraction structurée de données avec <b>Llama 3.2 Vision</b></p>
+    <div class="logo-container">
+        <h2>IDP Project</h2>
     </div>
 """, unsafe_allow_html=True)
 
-# Sidebar Configuration
-with st.sidebar:
-    st.markdown("### ⚙️ Configuration")
-    model_choice = st.selectbox(
-        "🤖 Modèle IA",
-        ["meta-llama/llama-4-scout-17b-16e-instruct", "llava"],
-        help="Sélectionnez le modèle à utiliser pour l'analyse"
-    )
-    
-    st.divider()
-    
-    st.markdown("### 📋 Schéma du document")
-    
-    # Lecture automatique des schémas disponibles
-    schema_dir = "schemas"
-    schema_files = [f for f in os.listdir(schema_dir) if f.endswith('.json')]
-    
-    selected_schema_file = st.selectbox(
-        "Type de document",
-        schema_files,
-        help="Choisissez le schéma JSON correspondant à votre document"
-    )
-    
-    # Chargement du contenu du schéma sélectionné
-    target_schema = None
-    if selected_schema_file:
-        with open(os.path.join(schema_dir, selected_schema_file), 'r') as f:
-            schema_content = f.read()
-        
-        target_schema = st.text_area(
-            "Schéma JSON",
-            schema_content,
-            height=200,
-            key="schema_input",
-            help="Le schéma utilisé pour extraire et structurer les données"
-        )
 
-# Main content area
+# --- BARRE DE NAVIGATION (IMMÉDIATEMENT SOUS LE LOGO) ---
+col_btn_img, col_btn_json, col_spacer = st.columns([1, 1, 6])
+
+with col_btn_img:
+    btn_style_img = "secondary" if st.session_state.active_view != 'Image' else "primary"
+    if st.button("🖼️ Visualiser l'Image", type=btn_style_img, use_container_width=True, key='view_img'):
+        st.session_state.active_view = 'Image'
+
+with col_btn_json:
+    btn_style_json = "secondary"
+    if st.session_state.extraction_result:
+        btn_style_json = "secondary" if st.session_state.active_view != 'JSON' else "primary"
+        if st.button("🌲 Visualiser le JSON", type=btn_style_json, use_container_width=True, key='view_json'):
+            st.session_state.active_view = 'JSON'
+    else:
+        st.button("🌲 Visualiser le JSON", disabled=True, use_container_width=True)
+
+st.markdown("---")
+# Fin de la barre de navigation
+
+# --- UPLOADER ---
 st.markdown("<div class='section-title'>📤 Télécharger votre document</div>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
@@ -106,94 +111,113 @@ uploaded_file = st.file_uploader(
     help="Formats acceptés: PNG, JPG, JPEG (max 200MB)"
 )
 
-if uploaded_file and target_schema:
-    # Affichage en deux colonnes
-    col1, col2 = st.columns([1, 1], gap="large")
+# Réinitialiser le résultat si on change de fichier
+if uploaded_file and 'last_uploaded_file' in st.session_state:
+    if st.session_state.last_uploaded_file != uploaded_file.name:
+        st.session_state.extraction_result = None
+        st.session_state.last_uploaded_file = uploaded_file.name
+        st.session_state.active_view = 'Image'
+elif uploaded_file:
+    st.session_state.last_uploaded_file = uploaded_file.name
+
+# --- SIDEBAR (Configuration + Contrôles) ---
+with st.sidebar:
+    st.markdown("### ⚙️ Configuration du Modèle")
+    model_choice = st.selectbox(
+        "🤖 Modèle IA",
+        ["meta-llama/llama-4-scout-17b-16e-instruct"],
+        help="Sélectionnez le modèle à utiliser pour l'analyse"
+    )
+    st.info("ℹ️ L'extraction se fait en mode Auto-Schema.")
     
-    with col1:
-        st.markdown("<div class='section-title'>👁️ Aperçu du document</div>", unsafe_allow_html=True)
-        image = Image.open(uploaded_file)
+    st.divider()
+    st.markdown("### 🖼️ Contrôles de Visualisation")
+    zoom_level = st.slider("🔍 Zoom (%)", 50, 200, 100, 10, key="sidebar_zoom")
+
+    st.divider()
+    
+    # --- LOGIQUE D'EXTRACTION ---
+    if uploaded_file:
+        if st.button("🚀 Extraire les données", type="primary", use_container_width=True, key="extract_btn"):
+            st.session_state.extraction_result = None 
+            st.session_state.active_view = 'JSON'
+
+            st.info("⏳ Analyse en cours... Voir les résultats dans la vue 'JSON'.")
+
+            try:
+                uploaded_file.seek(0) 
+                img_bytes = uploaded_file.read()
+                encoded_image = base64.b64encode(img_bytes).decode('utf-8')
+                
+                raw_result_generator = analyse_image(
+                    image=encoded_image,
+                    model=model_choice
+                )
+
+                full_raw_result = "".join([chunk.choices[0].delta.content or "" for chunk in raw_result_generator])
+                
+                # Parsing final
+                if isinstance(full_raw_result, str):
+                    cleaned_str = clean_json_output(full_raw_result) 
+                    try:
+                        final_data = json.loads(cleaned_str)
+                    except json.JSONDecodeError:
+                        final_data = {"error": "JSON invalide", "raw": full_raw_result}
+                else:
+                    final_data = full_raw_result
+
+                # Sauvegarde et mise à jour de l'UI
+                st.session_state.extraction_result = final_data
+                st.rerun() 
+
+            except Exception as e:
+                st.error(f"❌ Erreur critique lors de l'extraction: {str(e)}")
+    else:
+        st.warning("⚠️ Téléchargez un fichier pour activer le bouton.")
+
+
+# --- CONTENU PRINCIPAL : AFFICHAGE DÉTAILLÉ ---
+
+if uploaded_file:
+    uploaded_file.seek(0)
+    image_pil = Image.open(uploaded_file)
+    
+    # 2. Affichage du contenu basé sur l'état
+    
+    # --- VUE IMAGE ---
+    if st.session_state.active_view == 'Image':
+        st.markdown("### Aperçu du Document (Vue Image)", unsafe_allow_html=True)
+        st.markdown(f"**Fichier:** `{uploaded_file.name}`")
+        st.markdown("---")
+        st.image(image_pil, width=int(image_pil.width * zoom_level / 100), use_container_width=True) 
         
-        # Options de zoom et plein écran
-        zoom_cols = st.columns([1, 1, 2])
-        with zoom_cols[0]:
-            zoom_level = st.slider("🔍 Zoom", 50, 200, 100, 10, help="Ajustez le niveau de zoom")
-        with zoom_cols[1]:
-            if st.button("⛶ Plein écran", use_container_width=True):
-                st.session_state.fullscreen_mode = True
+    # --- VUE JSON ---
+    elif st.session_state.active_view == 'JSON' and st.session_state.extraction_result:
+        result_data = st.session_state.extraction_result
         
-        # Mode plein écran
-        if st.session_state.get('fullscreen_mode', False):
+        st.markdown("### Données Structurées (Vue JSON)", unsafe_allow_html=True)
+        st.markdown("---")
+
+        if "error" in result_data and "raw" in result_data:
+            st.error("❌ Le modèle n'a pas renvoyé un JSON valide.")
+            with st.expander("Réponse brute du modèle", expanded=True):
+                st.code(result_data["raw"], language="json")
+        else:
             st.markdown("""
-                <div style="background: white; padding: 20px; border-radius: 10px;">
+                <div class="success-box">
+                    <h4>✅ Extraction réussie!</h4>
+                </div>
             """, unsafe_allow_html=True)
             
-            col_back, col_zoom_fs = st.columns([2, 1])
-            with col_back:
-                if st.button("← Retour", use_container_width=True):
-                    st.session_state.fullscreen_mode = False
-                    st.rerun()
-            with col_zoom_fs:
-                zoom_fs = st.slider("Zoom plein écran", 50, 300, 150, 10)
-            
-            st.image(image, width=int(image.width * zoom_fs / 100), use_column_width=False)
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            # Affichage normal avec zoom
-            st.image(image, width=int(image.width * zoom_level / 100), use_column_width=False)
-            st.markdown(f"**Fichier:** `{uploaded_file.name}`")
-    
-    with col2:
-        st.markdown("<div class='section-title'>⚡ Traitement</div>", unsafe_allow_html=True)
-        
-        st.markdown("""
-            <div class="info-box">
-                <p><b>Cliquez sur le bouton ci-dessous</b> pour lancer l'extraction des données du document.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🚀 Extraire les données", type="primary", use_container_width=True):
-            with st.spinner("⏳ Analyse visuelle en cours... Veuillez patienter"):
-                try:
-                    # Conversion image pour l'API
-                    img_byte_arr = io.BytesIO()
-                    image.save(img_byte_arr, format=image.format)
-                    img_bytes = img_byte_arr.getvalue()
-                    
-                    # Construction du prompt
-                    prompt = f"Analyze this image. Extract data strictly following this JSON schema: {target_schema}. Return ONLY JSON."
-                    
-                    # Appel Backend
-                    raw_result = analyze_image(img_bytes, prompt, model=model_choice)
-                    
-                    # Parsing
-                    final_data = clean_json_output(raw_result)
-                    
-                    if "error" in final_data:
-                        st.error("❌ Erreur lors du parsing des données")
-                        st.markdown("**Réponse brute du modèle:**")
-                        st.code(raw_result, language="json")
-                    else:
-                        st.markdown("""
-                            <div class="success-box">
-                                <h4>✅ Extraction réussie!</h4>
-                                <p>Les données ont été correctement extraites et structurées.</p>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        st.markdown("<div class='section-title'>📊 Données extraites</div>", unsafe_allow_html=True)
-                        st.json(final_data)
-                        
-                        # Option de téléchargement
-                        col_download, col_copy = st.columns(2)
-                        with col_download:
-                            st.download_button(
-                                label="⬇️ Télécharger JSON",
-                                data=json.dumps(final_data, ensure_ascii=False, indent=2),
-                                file_name=f"extraction_{uploaded_file.name.split('.')[0]}.json",
-                                mime="application/json"
-                            )
-                except Exception as e:
-                    st.error(f"❌ Une erreur est survenue: {str(e)}")
+            st.markdown("### Exploration des Nœuds JSON")
+            st.json(result_data, expanded=True) 
 
-elif uploaded_file and not target_schema:
-    st.warning("⚠️ Veuillez sélectionner un schéma dans la barre latérale avant de continuer.")
+            # Bouton de téléchargement
+            json_str = json.dumps(result_data, ensure_ascii=False, indent=2)
+            st.download_button(
+                label="⬇️ Télécharger JSON",
+                data=json_str,
+                file_name=f"extract_{uploaded_file.name.split('.')[0]}.json",
+                mime="application/json",
+                use_container_width=True
+            )

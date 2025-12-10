@@ -1,22 +1,26 @@
 import json
 import re
 
+import json
+import re # <-- NÉCESSAIRE POUR LES EXPRESSIONS RÉGULIÈRES
+
 def clean_json_output(raw_text):
     """
     Nettoie la réponse du LLM pour ne garder que le JSON valide.
-    Retire les balises markdown ```json ... ```
+    Retire les balises markdown ```json ... ``` ou ``` ... ```
     """
-    try:
-        # Si le modèle renvoie du markdown
-        if "```" in raw_text:
-            pattern = r"```json(.*?)```"
-            match = re.search(pattern, raw_text, re.DOTALL)
-            if match:
-                raw_text = match.group(1)
-            else:
-                # Essayer de nettoyer les balises génériques
-                raw_text = raw_text.replace("```json", "").replace("```", "")
+    # 1. Recherche du motif ```json ... ``` (non-greedy)
+    # re.DOTALL permet de capturer les sauts de ligne (\s*)
+    match = re.search(r"```json\s*(.*?)\s*```", raw_text, re.DOTALL)
+    
+    if match:
+        # Retourne le contenu capturé dans le groupe 1, nettoyé des espaces
+        return match.group(1).strip()
+    
+    # 2. Si le format est juste ``` ... ``` (sans 'json')
+    match = re.search(r"```\s*(.*?)\s*```", raw_text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
         
-        return json.loads(raw_text.strip())
-    except Exception as e:
-        return {"error": "Parsing failed", "raw_text": raw_text}
+    # 3. Si aucune balise n'est trouvée, on suppose que le texte est déjà du JSON pur
+    return raw_text.strip()
