@@ -30,7 +30,7 @@ def generate_base64_from_local(file_path):
         return None
     return encode_image(file_path)
 
-def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None):
+def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None):
     print(f"Modèle utilisé pour l'analyse: {model}")
     base64_image = image
 
@@ -48,32 +48,62 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None):
     
     start_time = time.time()
     print(f"Envoi du fichier local à Groq...")
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "I want you to generate a Json file of the document with no other text. Just a json file. Json file : "
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            # Utilisation de la chaîne Base64 encodée
-                            "url": base64_url
+
+    if schema_json:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"I want you to generate a Json file of the document with no other text. Just a json file according to this schema: {schema_json} . Json file : "
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                # Utilisation de la chaîne Base64 encodée
+                                "url": base64_url
+                            }
                         }
-                    }
-                ]
-            }
-        ],
-        temperature=1,
-        max_completion_tokens=1024,
-        top_p=1,
-        stream=True,
-        stop=None
-    )
+                    ]
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=True,
+            stop=None
+        )
+
+    else :
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "I want you to generate a Json file of the document with no other text. Just a json file. Json file : "
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                # Utilisation de la chaîne Base64 encodée
+                                "url": base64_url
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=True,
+            stop=None
+        )
 
     end_time = time.time()
     print(f"\n\nTemps d'exécution total: {end_time - start_time:.2f} secondes")

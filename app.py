@@ -69,6 +69,20 @@ with st.sidebar:
         ["meta-llama/llama-4-scout-17b-16e-instruct", "easyocr"],
         help="Sélectionnez le modèle à utiliser pour l'analyse"
     )
+    st.markdown("### 📋 Schéma de Données")
+    schema_dir = "schemas"
+    available_schemas = [f for f in os.listdir(schema_dir) if f.endswith('.json')]
+    # Ajout d'une option "Aucun (Auto-détection)"
+    selected_schema_name = st.selectbox("Format de sortie", ["Auto-détection"] + available_schemas)
+
+    target_schema = None
+    if selected_schema_name != "Auto-détection":
+        with open(os.path.join(schema_dir, selected_schema_name), "r") as f:
+            target_schema = f.read()
+        with st.expander("Voir le schéma cible"):
+            st.code(target_schema, language="json")
+
+
     st.info("ℹ️ Mode Batch activé : Traitement de plusieurs fichiers.")
     
     st.divider()
@@ -141,7 +155,7 @@ if uploaded_files:
                     # 1. OCR Brut
                     raw_text, _ = process_with_easyocr(img_bytes)
                     # 2. Structuration via LLM
-                    json_str = parse_ocr_with_llm(raw_text, client_groq=client)
+                    json_str = parse_ocr_with_llm(raw_text, client_groq=client,schema_json=target_schema)
                     # 3. Nettoyage
                     final_data = json.loads(clean_json_output(json_str))
                     
@@ -151,7 +165,8 @@ if uploaded_files:
                     raw_result_generator = analyse_image(
                         image=encoded_image,
                         model=model_choice,
-                        GROQ_API_KEY=GROQ_API_KEY
+                        GROQ_API_KEY=GROQ_API_KEY,
+                        schema_json=target_schema
                     )
                     # Reconstitution du stream
                     full_raw_result = "".join([chunk.choices[0].delta.content or "" for chunk in raw_result_generator])
