@@ -42,24 +42,40 @@ import json
 
 import json
 
-def parse_ocr_with_llm(ocr_text, client_groq=None, model="llama-3.1-8b-instant"):
+def parse_ocr_with_llm(ocr_text, client_groq=None, model="llama-3.1-8b-instant", schema_json=None):
     """
     Prend le texte brut d'EasyOCR et le transforme en JSON strict via un LLM.
     """
-    prompt = f"""
-    Tu es un expert en extraction de données. Voici des données brutes issues d'un OCR :
+    if schema_json :
+        prompt = f"""
+        Tu es un expert en extraction de données. Voici des données brutes issues d'un OCR :
 
-    --- DONNÉES OCR ---
-    {ocr_text}
-    -------------------
-    
-    Ta mission :
-    1. Analyse ce texte pour identifier les informations clés.
-    2. Corrige les erreurs évidentes de l'OCR.
-    3. Génère un objet JSON structuré contenant ces informations.
-    
-    IMPORTANT : Réponds UNIQUEMENT avec le code JSON. Pas de phrases d'introduction, pas de markdown (```json). Juste le JSON brut.
-    """
+        --- DONNÉES OCR ---
+        {ocr_text}
+        -------------------
+        
+        Ta mission :
+        1. Analyse ce texte pour identifier les informations clés.
+        2. Corrige les erreurs évidentes de l'OCR.
+        3. Génère un objet JSON structuré contenant ces informations selon ce schéma : {schema_json}
+        
+        IMPORTANT : Réponds UNIQUEMENT avec le code JSON. Pas de phrases d'introduction, pas de markdown (```json). Juste le JSON brut.
+        """
+    else :
+        prompt = f"""
+        Tu es un expert en extraction de données. Voici des données brutes issues d'un OCR :
+
+        --- DONNÉES OCR ---
+        {ocr_text}
+        -------------------
+        
+        Ta mission :
+        1. Analyse ce texte pour identifier les informations clés.
+        2. Corrige les erreurs évidentes de l'OCR.
+        3. Génère un objet JSON structuré contenant ces informations.
+        
+        IMPORTANT : Réponds UNIQUEMENT avec le code JSON. Pas de phrases d'introduction, pas de markdown (```json). Juste le JSON brut.
+        """
     
     try:
         # On utilise Groq avec le paramètre response_format pour garantir le JSON
