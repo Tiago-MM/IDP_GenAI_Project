@@ -85,6 +85,36 @@ uploaded_files = st.file_uploader(
     help="Formats acceptés: PNG, JPG, JPEG"
 )
 
+# --- PREVISUALISATION (NOUVELLE SECTION) ---
+if uploaded_files:
+    st.markdown("<div class='section-title'>2. Aperçu des documents</div>", unsafe_allow_html=True)
+    
+    # Création d'un dictionnaire pour accès facile
+    preview_map = {f.name: f for f in uploaded_files}
+    
+    col_sel, col_view = st.columns([1, 2])
+    
+    with col_sel:
+        # Sélecteur d'image pour la prévisualisation
+        selected_preview_name = st.selectbox(
+            "Choisir une image à vérifier :",
+            list(preview_map.keys()),
+            key="preview_selector"
+        )
+        if selected_preview_name:
+            file_info = preview_map[selected_preview_name]
+            st.info(f"📄 **Fichier :** {file_info.name}\n\n💾 **Taille :** {file_info.size / 1024:.1f} KB")
+
+    with col_view:
+        if selected_preview_name:
+            file_to_show = preview_map[selected_preview_name]
+            # IMPORTANT : seek(0) remet le curseur au début pour que l'image puisse être lue
+            file_to_show.seek(0)
+            image_preview = Image.open(file_to_show)
+            st.image(image_preview, caption=f"Aperçu : {selected_preview_name}", use_container_width=True)
+            # On remet le curseur à 0 pour que le processus d'extraction suivant ne plante pas
+            file_to_show.seek(0)
+
 # --- LOGIQUE D'EXTRACTION ---
 if uploaded_files:
     # Bouton d'action
@@ -169,11 +199,14 @@ if uploaded_files:
         
         st.divider()
         
-        # --- MODE BATCH (JSON GLOBAL) ---
-        if len(uploaded_files) > 1:
-            st.markdown("### 📦 Résultat Global (Tous les fichiers)")
+        # Création des onglets pour organiser l'affichage
+        tab_global, tab_detail = st.tabs(["📦 Vue Globale (JSON)", "🔍 Explorateur par Image"])
+        
+        # --- ONGLET 1 : VUE GLOBALE ---
+        with tab_global:
+            st.markdown(f"### Résultat consolidé ({len(st.session_state.batch_results)} documents)")
             
-            # Affichage JSON interactif
+            # Affichage JSON interactif global
             st.json(st.session_state.batch_results, expanded=False)
             
             # Bouton de téléchargement GLOBAL
@@ -187,38 +220,41 @@ if uploaded_files:
                 use_container_width=True
             )
 
-        # --- MODE SINGLE (VUE DÉTAILLÉE) ---
-        # Si on n'a qu'un seul fichier, on garde votre belle interface Split View
-        elif len(uploaded_files) == 1:
-            st.markdown(f"### 🔎 Vue Détaillée : `{uploaded_files[0].name}`")
+        # --- ONGLET 2 : EXPLORATEUR DÉTAILLÉ ---
+        with tab_detail:
+            # Création d'un dictionnaire {nom_fichier: fichier_uploadé} pour retrouver l'image facilement
+            file_map = {f.name: f for f in uploaded_files}
             
-            col1, col2 = st.columns(2)
+            # Liste des fichiers traités (récupérés depuis les résultats)
+            processed_files = [res.get("_Source_File", "Inconnu") for res in st.session_state.batch_results]
             
-            with col1:
-                st.info("Document Source")
-                uploaded_files[0].seek(0)
-                image_pil = Image.open(uploaded_files[0])
-                st.image(image_pil, use_container_width=True)
-            
-            with col2:
-                st.info("Données Extraites")
-                # On prend le premier élément de la liste
-                result_unit = st.session_state.batch_results[0]
-                st.json(result_unit, expanded=True)
+            if processed_files:
+                # Sélecteur d'image
+                selected_filename = st.selectbox("Choisir un document à inspecter :", processed_files)
                 
-                # Téléchargement unitaire
-                json_str_unit = json.dumps(result_unit, indent=2, ensure_ascii=False)
-                st.download_button(
-                    label="⬇️ Télécharger JSON",
-                    data=json_str_unit,
-                    file_name=f"extract_{uploaded_files[0].name}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
+                # Récupération des données correspondantes
+                selected_result = next((item for item in st.session_state.batch_results if item["_Source_File"] == selected_filename), None)
+                selected_image_file = file_map.get(selected_filename)
+
+                # Affichage Split View (Image | JSON)
+                if selected_image_file and selected_result:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.info(f"🖼️ Image : {selected_filename}")
+                        selected_image_file.seek(0)
+                        img = Image.open(selected_image_file)
+                        st.image(img, use_container_width=True)
+                    
+                    with col2:
+                        st.info("🧠 Données Extraites")
+                        st.json(selected_result, expanded=True)
+                else:
+                    st.warning("Impossible d'associer l'image au résultat.")
+            else:
+                st.info("Aucun résultat à afficher pour le moment.")
 
     else:
-        # Message d'attente si pas encore traité
-        if len(uploaded_files) == 1:
-            st.info("👆 Cliquez sur le bouton 'Extraire' pour analyser ce document.")
-        else:
+        # Message d'attente avant traitement
+        if len(uploaded_files) > 0:
             st.info(f"👆 Cliquez sur 'Lancer l'extraction' pour traiter vos {len(uploaded_files)} documents.")
