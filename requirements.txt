@@ -2,20 +2,11 @@ ollama
 pillow
 python-dotenv
 pandas
-# --- Coeur IA ---
 transformers
 torch
 torchvision
-
-# --- TensorFlow (Version bridée pour compatibilité) ---
 tensorflow<2.16
-
-# --- Interface Web ---
 streamlit
-
-# --- API Groq (Ajouté) ---
 groq
-
-# --- Compatibilité SageMaker (NE PAS TOUCHER) ---
 sagemaker<3.0.0
 protobuf==3.20.3

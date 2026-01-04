@@ -1,13 +1,11 @@
 from groq import Groq
 import os
 import base64
-import time
 
 VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
 
-# --- FONCTION POUR ENCODER L'IMAGE ---
+#Encodes a local file to a Base64 string
 def encode_image(image_path):
-    """Encodes a local file to a Base64 string."""
     try:
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
@@ -18,13 +16,12 @@ def encode_image(image_path):
         print(f"Erreur lors de l'encodage de l'image: {e}")
         return None
 
-# --- VÉRIFICATION ET ENCODAGE ---
+# check if file exists
 def check_file_exists(file_path):
-    """Vérifie si le fichier existe à l'emplacement donné."""
     return os.path.isfile(file_path)
 
+# generate base64 from local file
 def generate_base64_from_local(file_path):
-    """Génère une chaîne Base64 à partir d'un fichier local."""
     if not check_file_exists(file_path):
         print(f"Erreur: Le fichier n'existe pas à l'emplacement: {file_path}")
         return None
@@ -37,18 +34,15 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None)
     if not base64_image:
         exit()
 
-    # Format Base64 obligatoire pour l'API
     base64_url = f"data:image/jpeg;base64,{base64_image}"
 
-    # --- APPEL À L'API GROQ ---
+    #groq client
     client = Groq(api_key=GROQ_API_KEY)
 
-    # Note: Je remplace le modèle par le modèle Vision Groq supporté (Llama 3.2 Vision)
-    # Si vous avez un accès spécial, vous pouvez remettre votre nom de modèle.
     
-    start_time = time.time()
     print(f"Envoi du fichier local à Groq...")
 
+    # case with schema
     if schema_json:
         completion = client.chat.completions.create(
             model=model,
@@ -63,7 +57,6 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None)
                         {
                             "type": "image_url",
                             "image_url": {
-                                # Utilisation de la chaîne Base64 encodée
                                 "url": base64_url
                             }
                         }
@@ -77,6 +70,7 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None)
             stop=None
         )
 
+    # case without schema
     else :
         completion = client.chat.completions.create(
             model=model,
@@ -91,7 +85,6 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None)
                         {
                             "type": "image_url",
                             "image_url": {
-                                # Utilisation de la chaîne Base64 encodée
                                 "url": base64_url
                             }
                         }
@@ -104,8 +97,5 @@ def analyse_image(image, model=VISION_MODEL, GROQ_API_KEY=None,schema_json=None)
             stream=True,
             stop=None
         )
-
-    end_time = time.time()
-    print(f"\n\nTemps d'exécution total: {end_time - start_time:.2f} secondes")
     
     return completion

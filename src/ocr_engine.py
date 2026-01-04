@@ -2,27 +2,23 @@ import easyocr
 import numpy as np
 from PIL import Image
 import io
+import json
 
-# On charge le Reader une seule fois (Variable globale ou via st.cache_resource)
-# 'fr' pour français, 'en' pour anglais
-reader = easyocr.Reader(['fr', 'en'], gpu=False) # Mettez gpu=True si vous en avez un
 
+reader = easyocr.Reader(['fr', 'en'], gpu=False)
+
+# process image with EasyOCR
+# image_bytes : bytes
+# returns: full_text (str), json_output (list of dict)
 def process_with_easyocr(image_bytes):
-    """
-    Extrait le texte et les positions avec EasyOCR.
-    Retourne une liste de dictionnaires compatible JSON.
-    """
+
     try:
-        # EasyOCR accepte directement les bytes dans readtext
-        # Mais passer par PIL -> bytes est plus sûr pour les formats exotiques
         results = reader.readtext(image_bytes)
         
         json_output = []
         full_text = ""
 
         for bbox, text, conf in results:
-            # Nettoyage des types Numpy (int32/int64) qui font planter json.dumps
-            # bbox est une liste de 4 points [ [x,y], [x,y], ... ]
             clean_bbox = [[int(p[0]), int(p[1])] for p in bbox]
             
             json_output.append({
@@ -37,15 +33,10 @@ def process_with_easyocr(image_bytes):
     except Exception as e:
         return f"Erreur EasyOCR : {str(e)}", []
 
-# Ajoutez cet import si besoin
-import json
 
-import json
 
+# parse OCR text with LLM to structured JSON
 def parse_ocr_with_llm(ocr_text, client_groq=None, model="llama-3.1-8b-instant", schema_json=None):
-    """
-    Prend le texte brut d'EasyOCR et le transforme en JSON strict via un LLM.
-    """
     if schema_json :
         prompt = f"""
         Tu es un expert en extraction de données. Voici des données brutes issues d'un OCR :
@@ -78,7 +69,7 @@ def parse_ocr_with_llm(ocr_text, client_groq=None, model="llama-3.1-8b-instant",
         """
     
     try:
-        # On utilise Groq avec le paramètre response_format pour garantir le JSON
+        # create json chat completion
         chat_completion = client_groq.chat.completions.create(
             messages=[
                 {"role": "system", "content": "You are a data extractor. Output only valid JSON."},
@@ -87,9 +78,9 @@ def parse_ocr_with_llm(ocr_text, client_groq=None, model="llama-3.1-8b-instant",
             model=model,
             temperature=0,
             stream=False,
-            response_format={"type": "json_object"} # <--- C'est ça qui force le JSON pur
+            response_format={"type": "json_object"} # Ensure the response is JSON
         )
         return chat_completion.choices[0].message.content
     except Exception as e:
-        # En cas d'erreur, on renvoie un JSON d'erreur pour ne pas casser l'app
+        # if error in parsing
         return json.dumps({"error": f"Erreur Parsing LLM : {str(e)}"})

@@ -12,15 +12,11 @@ from src.llm_engine import analyse_image
 from src.utils import clean_json_output
 from src.ocr_engine import process_with_easyocr, parse_ocr_with_llm
 
-# --- INITIALISATION ET CONFIGURATION GLOBALE ---
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# Check de sécurité
 if not GROQ_API_KEY:
     st.error("⚠️ Clé GROQ_API_KEY manquante dans le fichier .env")
     st.stop()
-
 client = Groq(api_key=GROQ_API_KEY)
 
 st.set_page_config(
@@ -30,13 +26,13 @@ st.set_page_config(
     menu_items={"About": "Extraction de documents avancée par IA"}
 )
 
-# --- INITIALISATION DU SESSION STATE ---
+# initialize session state variables
 if "batch_results" not in st.session_state:
     st.session_state.batch_results = []
 if "active_view" not in st.session_state: 
     st.session_state.active_view = 'JSON'
 
-# --- VARIABLES ET CSS CUSTOM ---
+# css styles
 PRIMARY_COLOR = "#333333"
 SECONDARY_COLOR = "#999999"
 SUCCESS_COLOR = "#609966"
@@ -54,14 +50,14 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
+# header
 st.markdown("""
     <div class="logo-container">
         <h2>📄 IDP Project : Intelligent Document Processing</h2>
     </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR (Configuration) ---
+# sidebar for configuration
 with st.sidebar:
     st.markdown("### ⚙️ Configuration")
     model_choice = st.selectbox(
@@ -72,7 +68,7 @@ with st.sidebar:
     st.markdown("### 📋 Schéma de Données")
     schema_dir = "schemas"
     available_schemas = [f for f in os.listdir(schema_dir) if f.endswith('.json')]
-    # Ajout d'une option "Aucun (Auto-détection)"
+    # auto detection option
     selected_schema_name = st.selectbox("Format de sortie", ["Auto-détection"] + available_schemas)
 
     target_schema = None
@@ -89,27 +85,25 @@ with st.sidebar:
     st.markdown("### 🖼️ Contrôles")
     zoom_level = st.slider("🔍 Zoom (%)", 50, 200, 100, 10, key="sidebar_zoom")
 
-# --- UPLOADER (BATCH) ---
+# batch upload
 st.markdown("<div class='section-title'>📤 Télécharger vos documents</div>", unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader(
     "Sélectionnez une ou plusieurs images",
     type=['png', 'jpg', 'jpeg'],
-    accept_multiple_files=True,  # <--- IMPORTANT POUR LE BATCH
+    accept_multiple_files=True,  # true for batch upload
     help="Formats acceptés: PNG, JPG, JPEG"
 )
 
-# --- PREVISUALISATION (NOUVELLE SECTION) ---
+
 if uploaded_files:
     st.markdown("<div class='section-title'>2. Aperçu des documents</div>", unsafe_allow_html=True)
     
-    # Création d'un dictionnaire pour accès facile
     preview_map = {f.name: f for f in uploaded_files}
     
     col_sel, col_view = st.columns([1, 2])
     
     with col_sel:
-        # Sélecteur d'image pour la prévisualisation
         selected_preview_name = st.selectbox(
             "Choisir une image à vérifier :",
             list(preview_map.keys()),
@@ -122,44 +116,41 @@ if uploaded_files:
     with col_view:
         if selected_preview_name:
             file_to_show = preview_map[selected_preview_name]
-            # IMPORTANT : seek(0) remet le curseur au début pour que l'image puisse être lue
             file_to_show.seek(0)
             image_preview = Image.open(file_to_show)
             st.image(image_preview, caption=f"Aperçu : {selected_preview_name}", use_container_width=True)
-            # On remet le curseur à 0 pour que le processus d'extraction suivant ne plante pas
             file_to_show.seek(0)
 
-# --- LOGIQUE D'EXTRACTION ---
+# process button
 if uploaded_files:
-    # Bouton d'action
     if st.button(f"🚀 Lancer l'extraction ({len(uploaded_files)} fichiers)", type="primary", use_container_width=True):
         
         st.session_state.batch_results = [] # Reset des résultats
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        # --- BOUCLE SUR CHAQUE FICHIER ---
+        # processing each file
         for i, uploaded_file in enumerate(uploaded_files):
             filename = uploaded_file.name
             status_text.text(f"Traitement de {filename} ({i+1}/{len(uploaded_files)})...")
             
             try:
-                # Lecture du fichier
+                # read file bytes
                 uploaded_file.seek(0)
                 img_bytes = uploaded_file.read()
                 
                 final_data = None
                 
-                # --- CAS 1 : EASYOCR + LLM ---
+                # case easyocr
                 if model_choice == "easyocr":
-                    # 1. OCR Brut
+                    # brut ocr
                     raw_text, _ = process_with_easyocr(img_bytes)
-                    # 2. Structuration via LLM
+                    # transform with llm
                     json_str = parse_ocr_with_llm(raw_text, client_groq=client,schema_json=target_schema)
-                    # 3. Nettoyage
+                    # clean and parse json
                     final_data = json.loads(clean_json_output(json_str))
                     
-                # --- CAS 2 : VLM (LLAMA VISION / GROQ) ---
+                # case llm vision
                 else:
                     encoded_image = base64.b64encode(img_bytes).decode('utf-8')
                     raw_result_generator = analyse_image(
@@ -168,7 +159,7 @@ if uploaded_files:
                         GROQ_API_KEY=GROQ_API_KEY,
                         schema_json=target_schema
                     )
-                    # Reconstitution du stream
+                    # streaming aggregation
                     full_raw_result = "".join([chunk.choices[0].delta.content or "" for chunk in raw_result_generator])
                     
                     # Parsing
@@ -184,8 +175,7 @@ if uploaded_files:
                     else:
                         final_data = full_raw_result
 
-                # --- AGREGATION DES RÉSULTATS ---
-                # On ajoute le nom du fichier source dans le JSON pour s'y retrouver
+                # agregate results
                 if isinstance(final_data, dict):
                     final_data["_Source_File"] = filename
                     st.session_state.batch_results.append(final_data)
@@ -198,33 +188,29 @@ if uploaded_files:
             except Exception as e:
                 st.error(f"❌ Erreur sur {filename}: {str(e)}")
             
-            # Mise à jour barre de progression
             progress_bar.progress((i + 1) / len(uploaded_files))
             
         status_text.success("✅ Traitement terminé !")
-        time.sleep(1) # Petit temps pour voir le message
-        st.rerun() # Rafraîchir pour afficher les résultats
+        time.sleep(1) 
+        st.rerun() 
 
-# --- AFFICHAGE DES RÉSULTATS ---
-
+# print results if any
 if uploaded_files:
     
-    # S'il y a des résultats en mémoire
     if st.session_state.batch_results:
         
         st.divider()
         
-        # Création des onglets pour organiser l'affichage
         tab_global, tab_detail = st.tabs(["📦 Vue Globale (JSON)", "🔍 Explorateur par Image"])
         
-        # --- ONGLET 1 : VUE GLOBALE ---
+        # gloval view
         with tab_global:
             st.markdown(f"### Résultat consolidé ({len(st.session_state.batch_results)} documents)")
             
-            # Affichage JSON interactif global
+            # print json
             st.json(st.session_state.batch_results, expanded=False)
             
-            # Bouton de téléchargement GLOBAL
+            # download button
             json_str_all = json.dumps(st.session_state.batch_results, indent=2, ensure_ascii=False)
             st.download_button(
                 label="⬇️ Télécharger le JSON Global",
@@ -235,23 +221,22 @@ if uploaded_files:
                 use_container_width=True
             )
 
-        # --- ONGLET 2 : EXPLORATEUR DÉTAILLÉ ---
+        # detailed view per image
         with tab_detail:
-            # Création d'un dictionnaire {nom_fichier: fichier_uploadé} pour retrouver l'image facilement
+            #dict creation for easy access
             file_map = {f.name: f for f in uploaded_files}
             
-            # Liste des fichiers traités (récupérés depuis les résultats)
+            # files list 
             processed_files = [res.get("_Source_File", "Inconnu") for res in st.session_state.batch_results]
             
             if processed_files:
-                # Sélecteur d'image
                 selected_filename = st.selectbox("Choisir un document à inspecter :", processed_files)
                 
-                # Récupération des données correspondantes
+                
                 selected_result = next((item for item in st.session_state.batch_results if item["_Source_File"] == selected_filename), None)
                 selected_image_file = file_map.get(selected_filename)
 
-                # Affichage Split View (Image | JSON)
+                # Affichage Split View
                 if selected_image_file and selected_result:
                     col1, col2 = st.columns(2)
                     
@@ -270,6 +255,5 @@ if uploaded_files:
                 st.info("Aucun résultat à afficher pour le moment.")
 
     else:
-        # Message d'attente avant traitement
         if len(uploaded_files) > 0:
             st.info(f"👆 Cliquez sur 'Lancer l'extraction' pour traiter vos {len(uploaded_files)} documents.")
